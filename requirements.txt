@@ -1,0 +1,11 @@
+# web
+fastapi
+uvicorn
+requests
+pydantic-settings
+pycryptodome
+httpx
+
+#utils
+loguru
+bidict
