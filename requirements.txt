@@ -6,6 +6,12 @@ pydantic-settings
 pycryptodome
 httpx
 
+
+
 #utils
 loguru
 bidict
+pytest
+
+#config
+Pyyaml
