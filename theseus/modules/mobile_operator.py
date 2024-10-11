@@ -1,5 +1,6 @@
 import logging
 import time
+from xxlimited_35 import error
 
 from anyio.abc import value
 from appium import webdriver
@@ -7,7 +8,10 @@ from appium.options.android import UiAutomator2Options
 from appium.webdriver.common.appiumby import AppiumBy
 import os
 from collections import namedtuple
-from selenium.common.exceptions import NoSuchElementException,StaleElementReferenceException
+
+from appium.webdriver.extensions.android.nativekey import AndroidKey
+from selenium.common.exceptions import NoSuchElementException,StaleElementReferenceException,InvalidSelectorException
+import appium.webdriver.extensions.android.nativekey as nativekey
 
 from loguru import logger
 
@@ -125,6 +129,7 @@ class MobileOperator():
         self.screen_views = {}
         self.screen_views_name = ['智能助理']
         self.screen_selector = {}
+        self.hotseat_selector = {}
         self.all_app = {}
         self.width = self.driver.get_window_size()['width']
         self.height = self.driver.get_window_size()['height']
@@ -148,7 +153,7 @@ class MobileOperator():
 
     def get_mobile_info(self):
         logging.info(f"get_mobile_info start")
-        self.get_screen_view()
+        self.get_screen_view_selector()
         logging.info(f"get_screen_view over")
         self.get_all_apps()
         logging.info(f"get_all_apps over")
@@ -205,6 +210,10 @@ class MobileOperator():
         elements = self.driver.find_elements(by=AppiumBy.XPATH,value = value)
         return elements
 
+    def function_key(self,key = AndroidKey.HOME):
+        self.driver.press_keycode(int(key))
+        return ReturnValue(flag=True)
+
     def goto_screen_view(self, screen_id: int = 0):
         if screen_id >= len(self.screen_selector):
             return
@@ -214,14 +223,15 @@ class MobileOperator():
             self.driver.press_keycode(3)
             self.screen_selector[screen_id].click()
 
+    def get_hotseat(self):
+        ret = self.function_key(AndroidKey.HOME)
+
+        return ReturnValue(flag=True)
+
     def get_screen_view_selector(self):
-        ret = self.goto_screen()
+        ret = self.function_key(AndroidKey.HOME)
         if not ret.flag:
             return ret
-        # try:
-        #     screen_view_holder = self.driver.find_element(by=AppiumBy.ID,value=self.screen_view_frame.id)
-        # except NoSuchElementException as e:
-        #     return  ReturnValue(flag=False,message="Get screen view frame failed")
 
         try:
             screen_view_xpath = f'{self.workspace.xpath}/*/com.miui.home.launcher.ScreenView/*'
@@ -259,6 +269,24 @@ class MobileOperator():
         # print(f'get_screen_view count {len(self.screen_views)}')
         logger.info(f'Get {len(self.screen_views)} sceens')
         return  self.screen_views
+
+    def get_all_apps_ex(self):
+        for idx in range(1,len(self.screen_selector)):
+            self.goto_screen(idx)
+            app_pattern = f"{self.workspace.xpath}/*/android.view.ViewGroup/*[@clickable='true']"
+            logger.info(f'app_pattern {app_pattern}')
+            try:
+                apps = self.driver.find_elements(by=AppiumBy.XPATH,value = app_pattern)
+            except NoSuchElementException as e:
+                logger.warning(f'Error: {str(e)}')
+                return ReturnValue(flag=False)
+            except InvalidSelectorException as e:
+                logger.warning(f'Error: {str(e)}')
+                return ReturnValue(flag=False)
+
+            for app in apps:
+                logger.info(f'app {app.tag_name}')
+
 
     def get_all_apps(self):
         screen_id = 0
@@ -326,15 +354,7 @@ def test_screen_swipe(mobile_operator:MobileOperator):
 
 def test_get_screen_views(mobile_operator:MobileOperator):
     mobile_operator.get_screen_view_selector()
-    logger.info(f'screen 0')
-    mobile_operator.goto_screen_view(0)
-    time.sleep(2)
-    logger.info(f'screen 3')
-    mobile_operator.goto_screen_view(3)
-    logger.info(f'screen 1')
-    mobile_operator.goto_screen_view(1)
-    logger.info(f'screen 2')
-    mobile_operator.goto_screen_view(2)
+    mobile_operator.get_all_apps_ex()
 
 
 if __name__ == '__main__':
