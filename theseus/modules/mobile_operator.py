@@ -45,7 +45,7 @@ class AppInfo:
         self.name = name
         self.android_app = obj
         self.desc = desc
-        self.screen_id = type
+        self.screen_id = screen_id
 
 # 按照页面建立一颗树
 class AppBank:
@@ -56,10 +56,12 @@ class AppBank:
         if not tag_name:
             logger.warning(f'tag_name is <{tag_name}>')
             return  ReturnValue(flag=False,obj=None,message='app name is none')
-
-        appname = tag_name.split()[0]
+        tag_group = tag_name.split()
+        appname = tag_group[0]
         print(f'appname {appname}')
-        app_unread = tag_name.split(' ')[1]
+        app_unread = 0
+        if len(tag_group) > 1:
+            app_unread = tag_name.split(' ')[1]
 
         app_info = AppInfo(appname, element, desc = app_unread, screen_id = screen_idx)
         self.bank[appname] = app_info
@@ -196,6 +198,10 @@ class MobileOperator():
         self.function_key()
         self.goto_screen_view(app.obj.screen_id)
         appinfo.android_app.click()
+
+        return ReturnValue(flag=True,obj=None)
+
+    def tap_element(self,element:str):
 
         return ReturnValue(flag=True,obj=None)
 
