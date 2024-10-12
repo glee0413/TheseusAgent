@@ -41,73 +41,39 @@ class ReturnValue:
         self.llm_message = message
 
 class AppInfo:
-    def __init__(self, name, obj, desc, element_type):
+    def __init__(self, name, obj, desc, screen_id):
         self.name = name
-        self.object = obj
+        self.android_app = obj
         self.desc = desc
-        self.type = type
+        self.screen_id = type
 
 # 按照页面建立一颗树
 class AppBank:
     def __init__(self):
-        self.bank = {}
-    def push_element(self,screen_idx,element):
-        try:
-            ele_type = element.get_attribute('class')
-        except:
-            ele_type = 'no class'
+        self.bank = {} #key: app name; value : app ref
 
-        try:
-            ele_text = element.text
-        except:
-            ele_text = 'no text'
+    def insert_app(self,tag_name : str,screen_idx,element):
+        if not tag_name:
+            logger.warning(f'tag_name is <{tag_name}>')
+            return  ReturnValue(flag=False,obj=None,message='app name is none')
 
-        try:
-            ele_tag_name = element.tag_name
-        except:
-            ele_tag_name = 'no tag name'
+        appname = tag_name.split()[0]
+        print(f'appname {appname}')
+        app_unread = tag_name.split(' ')[1]
 
+        app_info = AppInfo(appname, element, desc = app_unread, screen_id = screen_idx)
+        self.bank[appname] = app_info
+        logger.info(f'Insert app {appname}')
 
+        return ReturnValue(flag=True,obj=app_info)
 
-        if not ele_text and not ele_tag_name:
-            if ele_type == 'android.widget.ImageView':
-                print('image should get text by ai')
-                return None
-            else:
-                return None
-        print(f'Push element {ele_text}:{ele_tag_name} -- {ele_type}')
+    def get_app(self, app_name):
+        if app_name in self.bank:
+            logger.info(f'find {app_name}')
+            return ReturnValue(flag=True,obj=self.bank[app_name])
 
-        if not element.get_attribute('clickable'):
-            return None
-
-        ele_name = element.text if element.text else element.tag_name
-        # ele_name = element.text if element.text else element.tag_name
-
-        app_info = AppInfo(ele_name, element, '', ele_type)
-        if screen_idx not in self.bank:
-            self.bank[screen_idx] = [app_info]
-        else:
-            self.bank[screen_idx].append(app_info)
-        return app_info
-
-    def get_app(self,name):
-        for screen_idx in self.bank:
-            for app in self.bank[screen_idx]:
-                if app.name == name:
-                    return app.object
-        return None
-
-    def get_screen_apps(self,screen_idx):
-        if screen_idx in self.bank:
-            return self.bank[screen_idx]
-        return []
-
-    def dump_bank(self):
-        for screen_idx in self.bank.keys():
-            print('################################')
-            print(f'List screen {screen_idx} apps:')
-            for app in self.bank[screen_idx]:
-                print(f'app name:{app.name} - type{app.type}')
+        logger.info(f'cant find {app_name}')
+        return ReturnValue(flag=False,obj=None)
 
 class AndroidElement:
     def __init__(self,id,xpath,ui2, text = ''):
@@ -129,7 +95,6 @@ class MobileOperator():
         self.screen_views = {}
         self.screen_views_name = ['智能助理']
         self.screen_selector = {}
-        self.hotseat_selector = {}
         self.all_app = {}
         self.width = self.driver.get_window_size()['width']
         self.height = self.driver.get_window_size()['height']
@@ -150,7 +115,6 @@ class MobileOperator():
             ui2= 'new UiSelector().className("com.miui.home.launcher.ScreenView").instance(1)'
         )
 
-
     def get_mobile_info(self):
         logging.info(f"get_mobile_info start")
         self.get_screen_view_selector()
@@ -158,74 +122,21 @@ class MobileOperator():
         self.get_all_apps()
         logging.info(f"get_all_apps over")
 
-    def goto_screen(self, screen_id = 1):
-        logger.info(f'Go to home page')
-        if screen_id == '0':
-            screen_name = '智能助理'
-        else:
-            screen_name = f'第{screen_id}屏'
+    def function_key(self,key = AndroidKey.HOME):
+        self.driver.press_keycode(int(key))
+        return ReturnValue(flag=True)
 
-        # cost 130ms
-        self.driver.press_keycode(3)
-        logger.info(f'start to wait for homepage')
-        # cost 7ms
-        self.driver.implicitly_wait(2)
-
-        logger.info(f'Go to home page over')
-        if screen_id == 1:
-            return ReturnValue(flag= True)
-
-        try:
-            logger.info(f'Go to screen {screen_name}')
-            # cost 130ms
-            screen_element = self.driver.find_element(by=AppiumBy.ACCESSIBILITY_ID,value = screen_name)
-            logger.info(f'find screen {screen_name}')
-            # cost 50ms
-            screen_element.click()
-            logger.info(f'Go to screen {screen_name} cmd over')
-        except NoSuchElementException as e:
-            # cost 2.3s
-            logger.info(f'No screen {screen_name} found')
-            return ReturnValue(flag = False,message='No screen named {screen_name}')
-
-        return ReturnValue(flag = True)
-
-    def swipe(self, left = True):
-        # if screen == 0:
-        #     self.driver.press_keycode(3)
-        #     self.driver.implicitly_wait(10)
-        end_pos = self.width
-        if left:
-            end_pos = 0
-        logger.info(f'Swipe to left {left} width {self.width} to {end_pos}')
-        self.driver.swipe(self.width - 10, self.height / 2,
-                          end_pos, self.height / 2, 500)
-
-    def init_app_bank(self):
-        elements = self.get_elements()
-        for ele in elements:
-            self.app_bank.push_element(0,ele)
+    def swipe(self, start_x: int, start_y: int, end_x: int, end_y: int):
+        logger.info(f'swipe : ({start_x},{start_y}),({end_x},{end_y})')
+        self.driver.swipe(start_x, start_y,
+                          end_x, end_y, 500)
 
     def get_elements(self, value="//*[@clickable='true']"):
         elements = self.driver.find_elements(by=AppiumBy.XPATH,value = value)
         return elements
 
-    def function_key(self,key = AndroidKey.HOME):
-        self.driver.press_keycode(int(key))
-        return ReturnValue(flag=True)
-
-    def goto_screen_view(self, screen_id: int = 0):
-        if screen_id >= len(self.screen_selector):
-            return
-        try:
-            self.screen_selector[screen_id].click()
-        except StaleElementReferenceException as e:
-            self.driver.press_keycode(3)
-            self.screen_selector[screen_id].click()
-
     def get_hotseat(self):
         ret = self.function_key(AndroidKey.HOME)
-
         return ReturnValue(flag=True)
 
     def get_screen_view_selector(self):
@@ -248,31 +159,18 @@ class MobileOperator():
 
         return ReturnValue(flag = True,obj = self.screen_views)
 
-    def get_screen_view(self,refresh = False):
-        # screen_views = self.driver.find_elements(by=AppiumBy.CLASS_NAME, value='com.miui.home.launcher.ScreenView')
+    def goto_screen_view(self, screen_id: int = 0):
+        if screen_id >= len(self.screen_selector):
+            return
+        try:
+            self.screen_selector[screen_id].click()
+        except StaleElementReferenceException as e:
+            self.driver.press_keycode(3)
+            self.screen_selector[screen_id].click()
 
-        # return self.driver.find_elements(by=AppiumBy.ACCESSIBILITY_ID,value=f'第*屏')
-        logger.info(f'Get screen view start')
-        if len(self.screen_views) != 0 and refresh == False:
-            return  self.screen_views
-
-        self.screen_views['智能助理'] = self.driver.find_element(by=AppiumBy.ACCESSIBILITY_ID, value='智能助理')
-        logger.info(f'Get {value} finish')
-        for idx in range(1,3):
-            try:
-                views = self.driver.find_element(by=AppiumBy.ACCESSIBILITY_ID,value=f'第{idx}屏')
-                if not views:
-                    break
-            except:
-                break
-            self.screen_views[f'第{idx}屏'] = views
-        # print(f'get_screen_view count {len(self.screen_views)}')
-        logger.info(f'Get {len(self.screen_views)} sceens')
-        return  self.screen_views
-
-    def get_all_apps_ex(self):
+    def get_all_apps(self):
         for idx in range(1,len(self.screen_selector)):
-            self.goto_screen(idx)
+            self.goto_screen_view(idx)
             app_pattern = f"{self.workspace.xpath}/*/android.view.ViewGroup/*[@clickable='true']"
             logger.info(f'app_pattern {app_pattern}')
             try:
@@ -285,33 +183,21 @@ class MobileOperator():
                 return ReturnValue(flag=False)
 
             for app in apps:
-                logger.info(f'app {app.tag_name}')
+                app_name = app.tag_name
+                logger.info(f'app {app_name}')
+                self.app_bank.insert_app(tag_name=app_name,screen_idx=idx,element=app)
 
+    def tap_app(self,app_name):
+        app = self.app_bank.get_app(app_name)
+        if not app.flag:
+            return app
 
-    def get_all_apps(self):
-        screen_id = 0
+        appinfo:AppInfo = app.obj
+        self.function_key()
+        self.goto_screen_view(app.obj.screen_id)
+        appinfo.android_app.click()
 
-        for idx,screen in self.screen_views.items():
-            logger.info(f'swip to screen {idx}')
-            if screen_id == 0:
-                screen.click()
-
-            self.driver.implicitly_wait(2)
-
-            # logger.info(f'Get screen {screen.text}: {screen.tag_name} start')
-            screen_elements = self.get_elements()
-            logger.info(f'Get screen: {idx} apps count {len(screen_elements)}')
-
-            for ele in screen_elements:
-                app = self.app_bank.push_element(idx,ele)
-                if not app:
-                    continue
-                if app.name not in self.all_app:
-                    self.all_app[app.name] = app
-
-            if screen_id < len(self.screen_views):
-                self.swipe()
-                screen_id += 1
+        return ReturnValue(flag=True,obj=None)
 
     def print_app(self):
         for app in self.all_app:
@@ -354,8 +240,12 @@ def test_screen_swipe(mobile_operator:MobileOperator):
 
 def test_get_screen_views(mobile_operator:MobileOperator):
     mobile_operator.get_screen_view_selector()
-    mobile_operator.get_all_apps_ex()
-
+    mobile_operator.get_all_apps()
+    logging.info(f'Open 大众点评')
+    mobile_operator.tap_app('大众点评')
+    time.sleep(2)
+    logging.info(f'Open 腾讯视频')
+    mobile_operator.tap_app('腾讯视频')
 
 if __name__ == '__main__':
     logger.info(f'MobileOperator start')
